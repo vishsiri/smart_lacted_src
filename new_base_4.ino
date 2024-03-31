@@ -4,6 +4,7 @@
 #define BLYNK_PRINT Serial
 
 // #define LINE_TOKEN "dGVz4XvSOqJxEb6GjiFdrJMJTArkFkx21WYCz8BG3H6a"
+#include <Adafruit_Fingerprint.h>
 #include <ESP32Firebase.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -13,20 +14,22 @@
 #include <MFRC522.h>
 #include <time.h>
 #include <BlynkSimpleEsp32.h>
-#include <TridentTD_LineNotify.h>
+// #include <TridentTD_LineNotify.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <Arduino.h>
 #include "time.h"
 #include "pj_fingerprint.h"
+#include "new_base_4.h"
+#include "oled_screen.h"
 // PROTOCOL SETUP
 #define _SSID "vishsiri"                                                                              // Your WiFi SSID
 #define _PASSWORD "11111111"                                                                          // Your WiFi Password
 #define REFERENCE_URL "https://esp32test-trigger-default-rtdb.asia-southeast1.firebasedatabase.app/"  // Your Firebase project reference url
 
 // VARIABLE SETUP
-String inputString = "";  // String to hold the entered keys
-String _FIREBASE_DEVICE_PATH = ""; //Set Device Path
+String inputString = "";            // String to hold the entered keys
+String _FIREBASE_DEVICE_PATH = "";  //Set Device Path
 String cardUIDs[10] = {
   "12E73A4C",
   "7D3DB5C3",
@@ -39,30 +42,26 @@ String TimeString = "";
 bool doorStatus = false;
 //Time
 const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = 7 * 3600;
-const int   daylightOffset_sec = 0;
+const long gmtOffset_sec = 7 * 3600;
+const int daylightOffset_sec = 0;
 
 Firebase firebase(REFERENCE_URL);
 
 //TASK CORE
 TaskHandle_t Core1Task;
 
-void core1Task(void *pvParameters) {
+void core1Task(void* pvParameters) {
   while (1) {
     TimeSetting();
     TimeString = getTimeString();
-    fingerprint_read();
     vTaskDelay(pdMS_TO_TICKS(100));
-    fingerprint_write();
   }
 }
-
-
 // SETUP PIN
 #define BUZZER_PIN 12
 #define RED_BUTTON_PIN 27
 #define RELAY_LOCK 14
-#define OLED_RESET 16
+#define OLED_RESET -1
 #define LED_R 4
 #define LED_G 3
 #define LED_B 1
@@ -83,10 +82,10 @@ byte colPins[ROWS] = { 32, 33, 25, 26 };  // Connect to the column pinouts of th
 byte rowPins[COLS] = { 36, 39, 34, 35 };  // Connect to the row pinouts of the keypad
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
-
 // RFID SETUP
-#define SS_PIN 5
-#define RST_PIN 17
+#define SS_PIN 17
+#define RST_PIN 2
+
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 
 //RGB
@@ -99,12 +98,9 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 // RFID MODULE
 
 // BLYNK
-Adafruit_SSD1306 display(OLED_RESET);
+
 
 void defaultExecuteOnRun() {
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3c);  //สั่งให้จอ OLED เริ่มทำงานที่ Address 0x3C
-  display.clearDisplay();
-  display.display();
   digitalWrite(BUZZER_PIN, LOW);
   digitalWrite(RELAY_LOCK, LOW);
   SPI.begin();         // Initiate  SPI bus
@@ -141,36 +137,12 @@ void pinModeSetup() {
   pinMode(LED_B, OUTPUT);
 }
 
-void clearDisplay() {
-  display.clearDisplay();
-  display.display();
-}
-
-void updateDisplay(String str) {
-  display.clearDisplay();
-  display.setTextSize(2);  // Set text size to 2 (bigger)
-  display.setTextColor(SSD1306_WHITE);
-
-  // Calculate the x-coordinate to center the text
-  int16_t x = (display.width() - (str.length() * 16 * 2)) / 2;  // 16 pixels per character
-
-  // Draw the text at the calculated position
-  display.setCursor(x, 0);
-
-  // Replace each character with a star (*) and display
-  for (int i = 0; i < str.length(); i++) {
-    display.print('*');
-  }
-
-  display.display();
-}
-
 void beepConnectingSuccess() {
   for (int i = 0; i < 2; i++) {
     digitalWrite(BUZZER_PIN, HIGH);
-    vTaskDelay(pdMS_TO_TICKS(100)); // Delay for 100 milliseconds
+    vTaskDelay(pdMS_TO_TICKS(100));  // Delay for 100 milliseconds
     digitalWrite(BUZZER_PIN, LOW);
-    vTaskDelay(pdMS_TO_TICKS(100)); // Delay for another 100 milliseconds
+    vTaskDelay(pdMS_TO_TICKS(100));  // Delay for another 100 milliseconds
   }
 }
 
@@ -186,13 +158,14 @@ void beepDoorOpen() {
 void beepDoorNotOpen() {
   for (int i = 0; i < 1; i++) {
     digitalWrite(BUZZER_PIN, HIGH);
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(1000));
     digitalWrite(BUZZER_PIN, LOW);
     vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
 
 void connectWiFi() {
+
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   // Connect to WiFi
@@ -204,17 +177,21 @@ void connectWiFi() {
   while (WiFi.status() != WL_CONNECTED) {
     vTaskDelay(pdMS_TO_TICKS(500));
     Serial.print("-");
+    displayWiFiIcon_Disconnected();
   }
-
+  displayWiFiIcon_Connected();
   Serial.println("");
   Serial.println("WiFi Connected");
   beepConnectingSuccess();
 }
 
 void addCard() {
+  display_tag_your_key_card();
   if (!mfrc522.PICC_IsNewCardPresent()) {
     return;
   }
+
+  vTaskDelay(pdMS_TO_TICKS(2000));
 
   // Select one of the cards
   if (!mfrc522.PICC_ReadCardSerial()) {
@@ -246,13 +223,13 @@ void addCard() {
   }
 }
 
+
 bool checkExists_firebase(String UID) {
   String check = _FIREBASE_DEVICE_PATH + "/RFID/AllowCard/" + UID;
   String ckUID = firebase.getString(check);
-  if(ckUID == "OK"){
+  if (ckUID == "OK") {
     return true;
-  }
-  else{
+  } else {
     return false;
   }
 }
@@ -355,30 +332,29 @@ bool checkCard_firebase(String UID) {
   String path, data2;
   String check = _FIREBASE_DEVICE_PATH + "/RFID/AllowCard/" + UID;
   String ckUID = firebase.getString(check);
-  if(ckUID == "OK"){
+  if (ckUID == "OK") {
     openDoor("KEY CARD");
     path = _FIREBASE_DEVICE_PATH + "/RFID/AllHis/" + UID;
-    data2 = UID + " -- : "+ TimeString;
-    firebase.pushString(_FIREBASE_DEVICE_PATH + "/RFID/AllHis/All", data2);     //folder รวมประวัติทั้งหมด
-    firebase.pushString(path, TimeString);     //folder แยกประวัติ
+    data2 = UID + " -- : " + TimeString;
+    firebase.pushString(_FIREBASE_DEVICE_PATH + "/RFID/AllHis/All", data2);  //folder รวมประวัติทั้งหมด
+    firebase.pushString(path, TimeString);                                   //folder แยกประวัติ
     Serial.print("Detected\t  ");
     Serial.print(UID);
     Serial.print("\n");
     return true;
-  }
-  else{
+  } else {
     Serial.print("Not Found Data");
     return false;
   }
 }
 
-void TimeSetting(){
+void TimeSetting() {
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 }
 
 String getTimeString() {
   struct tm timeinfo;
-  if(!getLocalTime(&timeinfo)){
+  if (!getLocalTime(&timeinfo)) {
     Serial.println("Failed to obtain time");
     return "Failed to obtain time";
   }
@@ -390,7 +366,9 @@ String getTimeString() {
 void setup() {
   pinModeSetup();
   defaultExecuteOnRun();
-  Serial.begin(115200);
+  oled_setup();
+  Serial.begin(57600);
+  fingerprint_verify();
   connectWiFi();
   Blynk.begin(BLYNK_AUTH_TOKEN, _SSID, _PASSWORD);
   // LINE.setToken(LINE_TOKEN);
@@ -412,6 +390,7 @@ void openDoor(String type) {
   // LEDColor(2, 0, 0);
   //LINE.notify("DOOR OPEN WITH " + type);
   vTaskDelay(pdMS_TO_TICKS(2000));
+  digitalWrite(RELAY_LOCK, LOW);
 }
 
 void notOpenDoor(String type) {
@@ -421,7 +400,7 @@ void notOpenDoor(String type) {
   vTaskDelay(pdMS_TO_TICKS(1000));
 }
 
-void keyPinCheck() {
+bool keyPinCheck() {
   // Define your PIN
   const String correctPIN = "8888";  // Change this to your desired PIN
 
@@ -429,66 +408,72 @@ void keyPinCheck() {
 
   while (enteredPIN.length() < correctPIN.length()) {
     char key = keypad.getKey();
+    if (key == '*') {
+      display_CLEAR();
+      break;  // Exit the while loop if '*' key is pressed
+      return false;
+    }
     if (key != NO_KEY && isDigit(key)) {
       // Append the pressed key to the entered PIN
       enteredPIN += key;
       Serial.print(key);  // Print the pressed key to serial monitor
       delay(200);         // Delay to prevent multiple key presses
-
-      // Display the entered PIN on the OLED display
-      updateDisplay(enteredPIN);
     }
   }
 
   // Check if the entered PIN matches the correct PIN
   if (enteredPIN == correctPIN) {
     // If the PIN is correct, unlock the door
-    openDoor("KEYPAD");
+    // openDoor("KEYPAD");
     Serial.println("\nDoor Unlocked");
+    return true;
   } else {
     // If the PIN is incorrect, do nothing or display an error message
-    notOpenDoor("KEY PAD");
+    // notOpenDoor("KEY PAD");
     Serial.println("\nIncorrect PIN");
+    return false;
   }
 }
 
-void keyPressEvent(char key) {
-  switch (key) {
-    case '1':
-      break;
-    case '2':
-      break;
-    case 'A':
-      addCard();
-      break;
-    case 'B':
-      revokeCard();
-      break;
-    default:
-      break;
-  }
-}
-
-BLYNK_WRITE(V0)
-{
+BLYNK_WRITE(V1) {
   int value = param.asInt();
   openDoor("controller");
   vTaskDelay(pdMS_TO_TICKS(2000));
-  Blynk.virtualWrite(V0, 0);
+  Blynk.virtualWrite(V1, 0);
 }
+
+const char* desiredPasskey = "8888";
+char passkey[5];  // Assuming the passkey is 4 characters long
+bool passkeyEntered = false;
 
 void loop() {
   Blynk.run();
   char key = keypad.getKey();
   bool redButtonState = digitalRead(RED_BUTTON_PIN);
 
-  if (key != '\0') {
-    Serial.println(key);
-    keyPressEvent(key);  // Call keyPressEvent() function when a key is pressed
-    
-    // Wait until a new key is pressed
-    while (keypad.getKey() != '\0') {
-      delay(50); // Adjust delay time as needed
+  if (key == 'A') {
+    passkeyEntered = false;  // Reset passkeyEntered flag
+    while (!passkeyEntered) {
+      display_login_admin_menu();
+      char exitKey = keypad.getKey();
+      bool checkkkPin = keyPinCheck();
+      if (checkkkPin) {
+        passkeyEntered = true;
+        // Selector menu for options 1-5
+        int option = 0;
+        while (option < 1 || option > 5) {
+          display_admin_menu_main();
+          char selectorKey = keypad.getKey();
+          if (selectorKey >= '1' && selectorKey <= '5') {
+            option = selectorKey - '0'; // Convert char to int
+            handle_menu_option(option);
+          }
+        }
+      }
+      if (!checkkkPin) {
+        display_login_admin_fail();
+        break;
+      }
     }
   }
 
@@ -500,5 +485,32 @@ void loop() {
     //led(255, 0, 0);
     checkCard();
     vTaskDelay(pdMS_TO_TICKS(100));
+    fingerprint_check();
+  }
+}
+
+void handle_menu_option(int option) {
+  // Handle menu options 1-5
+  switch (option) {
+    case 1:
+      addCard();
+      break;
+    case 2:
+      revokeCard();
+      break;
+    case 3:
+      // Handle option 3
+      break;
+    case 4:
+      // Handle option 4
+      break;
+    case 5:
+      // Handle option 5
+      break;
+    case '*':
+      break;
+    default:
+      // Handle invalid option
+      break;
   }
 }

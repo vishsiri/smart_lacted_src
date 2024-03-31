@@ -2,7 +2,8 @@
 #define PJ_FINGERPRINT_H
 
 // Declare the sendMessageserer function
-void fingerprint_read();
-void fingerprint_write();
-
+void fingerprint_check();
+void fingerprint_register(int id);
+void fingerprint_delete(int id);
+void fingerprint_verify();
 #endif

@@ -1,12 +1,12 @@
 #include <Arduino.h>
 #include "pj_fingerprint.h"
 #include <Adafruit_Fingerprint.h>
-#include "new_base_4.h"
+#include "smart_lacted_door.h"
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial2);
 uint8_t id;
 
 
-void fingerprint_verify(){
+void fingerprint_verify() {
   finger.begin(57600);
   if (finger.verifyPassword()) {
     Serial.println("ตรวจพบเซ็นเซอร์!");
@@ -20,21 +20,28 @@ void fingerprint_verify(){
 
 int getFingerprintAmt() {
   int amt = finger.getTemplateCount();
-  Serial.print("ข้อมูลภายในเซ็นเซอร์ "); Serial.print(finger.templateCount); Serial.println(" รูปแบบ");
+  Serial.print("ข้อมูลภายในเซ็นเซอร์ ");
+  Serial.print(finger.templateCount);
+  Serial.println(" รูปแบบ");
   return amt;
 }
 
 void fingerprint_check() {
   int data = finger.getTemplateCount();
   vTaskDelay(pdMS_TO_TICKS(50));
-  int finger_id = getFingerprintID();
+  bool finger_id = getFingerprintID();
+  if (finger_id) {
+    openDoor("a");
+  } else {
+    Serial.println("NOT HAVE FINGER");
+  }
 }
 
 void fingerprint_register() {
   Serial.println("พร้อมสำหรับการบันทึกข้อมูลลายนิ้วมือ!");
   Serial.println("โปรดเลือก ID # (จาก 1 to 127) ที่คุณต้องการบันทึกข้อมูลลายนิ้วมือ...");
   id = finger.templateCount + 1;
-  if (id == 0) { 
+  if (id == 0) {
     return;
   }
   Serial.print("หมายเลข ID #");
@@ -204,19 +211,34 @@ uint8_t getFingerprintEnroll() {
 }
 
 
-int getFingerprintID() {
+bool getFingerprintID() {
   uint8_t p = finger.getImage();
-  if (p != FINGERPRINT_OK)  return -1;
+  if (p != FINGERPRINT_OK) return -1;
 
   p = finger.image2Tz();
-  if (p != FINGERPRINT_OK)  return -1;
+  if (p != FINGERPRINT_OK) return -1;
 
   p = finger.fingerFastSearch();
-  if (p != FINGERPRINT_OK)  return -1;
+  if (p != FINGERPRINT_OK) return -1;
 
   // found a match!
-  Serial.print("พบลายนิ้วมือ ID #"); Serial.print(finger.fingerID);
-  Serial.print(" ซึ่งมีความใกล้เคียงกัน "); Serial.println(finger.confidence);
+  Serial.print("พบลายนิ้วมือ ID #");
+  Serial.print(finger.fingerID);
+  Serial.print(" ซึ่งมีความใกล้เคียงกัน ");
+  Serial.println(finger.confidence);
 
-  return finger.fingerID;
+  bool have = firebase_check_fingerprint(finger.fingerID);
+
+  return have;
+}
+
+
+bool firebase_check_fingerprint(int id) {
+  String check = _FIREBASE_DEVICE_PATH + "/Finger/AllowFinger/" + id;
+  String ckUID = firebase.getString(check);
+  if (ckUID == "OK") {
+    return true;
+  } else {
+    return false;
+  }
 }

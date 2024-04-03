@@ -25,14 +25,15 @@ int getFingerprintAmt() {
 }
 
 void fingerprint_check() {
-  int data = getFingerprintID();
+  int data = finger.getTemplateCount();
   vTaskDelay(pdMS_TO_TICKS(50));
+  int finger_id = getFingerprintID();
 }
 
-void fingerprint_register(int id) {
+void fingerprint_register() {
   Serial.println("พร้อมสำหรับการบันทึกข้อมูลลายนิ้วมือ!");
   Serial.println("โปรดเลือก ID # (จาก 1 to 127) ที่คุณต้องการบันทึกข้อมูลลายนิ้วมือ...");
-  id = readnumber();
+  id = finger.templateCount + 1;
   if (id == 0) { 
     return;
   }

@@ -1,6 +1,6 @@
-#define BLYNK_TEMPLATE_ID "TMPL67-vBBOHR"
-#define BLYNK_TEMPLATE_NAME "IoT"
-#define BLYNK_AUTH_TOKEN "yboj7bZVEVRiCMJa2NwjFfU4JFOgMpJs"
+#define BLYNK_TEMPLATE_ID "TMPL6PdSWvWmQ"
+#define BLYNK_TEMPLATE_NAME "Dv1"
+#define BLYNK_AUTH_TOKEN "9CIfjcRGZRoiF1fRa-Oc-aTotO-0GY8y"
 #define BLYNK_PRINT Serial
 
 // #define LINE_TOKEN "dGVz4XvSOqJxEb6GjiFdrJMJTArkFkx21WYCz8BG3H6a"
@@ -83,8 +83,8 @@ byte rowPins[COLS] = { 36, 39, 34, 35 };  // Connect to the row pinouts of the k
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 // RFID SETUP
-#define SS_PIN 17
-#define RST_PIN 2
+#define SS_PIN 5
+#define RST_PIN 0
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 
@@ -176,6 +176,7 @@ void connectWiFi() {
 
   while (WiFi.status() != WL_CONNECTED) {
     vTaskDelay(pdMS_TO_TICKS(500));
+
     Serial.print("-");
     displayWiFiIcon_Disconnected();
   }
@@ -183,45 +184,53 @@ void connectWiFi() {
   Serial.println("");
   Serial.println("WiFi Connected");
   beepConnectingSuccess();
+  vTaskDelay(pdMS_TO_TICKS(2000));
 }
 
 void addCard() {
-  display_tag_your_key_card();
-  if (!mfrc522.PICC_IsNewCardPresent()) {
-    return;
-  }
+  bool cardDetected = false;
 
-  vTaskDelay(pdMS_TO_TICKS(2000));
+  while (!cardDetected) {
+    display_REQUEST_CARD();
+    Serial.println("WAIT CARD TAG TO ADD");
+    char key = keypad.getKey();
+    if (key == '*') {
+      loopKEYY(true);
+      return;
+    }
+    if (mfrc522.PICC_IsNewCardPresent()) {
+      // Select the card
+      if (mfrc522.PICC_ReadCardSerial()) {
+        beepConnectingSuccess();
+        Serial.println("NOT CARD");
+        String content = "";
+        for (byte i = 0; i < mfrc522.uid.size; i++) {
+          content.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? "0" : ""));
+          content.concat(String(mfrc522.uid.uidByte[i], HEX));
+        }
+        content.toUpperCase();
+        content.replace(" ", "");
 
-  // Select one of the cards
-  if (!mfrc522.PICC_ReadCardSerial()) {
-    return;
-  }
-  String content = "";
-  byte letter;
-  for (byte i = 0; i < mfrc522.uid.size; i++) {
-    Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
-    Serial.print(mfrc522.uid.uidByte[i], HEX);
-    content.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " "));
-    content.concat(String(mfrc522.uid.uidByte[i], HEX));
-  }
-  Serial.println();
-  Serial.print("Message : " + content);
-  content.toUpperCase();
-  content.replace(" ", "");
+        // Check if the card is already in the Firebase database
+        bool exists = checkExists_firebase(content);
 
-  // Check if the card is already in the Firebase database
-  bool exists = checkExists_firebase(content);
+        if (exists) {
+          Serial.println("Card already exists.");
+          display_ALREADY();
+        } else {
+          display_SUCCESS_ADD();
+          Serial.println("ADD Card Success!");
+          addCard_firebase(content);
+        }
 
-  if (exists) {
-    Serial.println("Card already exists.");
+        cardDetected = true;  // Exit the loop since card is detected
+      }
+    }
 
-  } else {
-    Serial.println("ADD Card Sucess!");
-
-    addCard_firebase(content);
+    delay(500);  // Wait for a short period before checking again
   }
 }
+
 
 
 bool checkExists_firebase(String UID) {
@@ -241,46 +250,49 @@ void addCard_firebase(String UID) {
 }
 
 void revokeCard() {
-  if (!mfrc522.PICC_IsNewCardPresent()) {
-    return;
-  }
-  if (!mfrc522.PICC_ReadCardSerial()) {
-    return;
-  }
-  // Show UID on serial monitor
-  Serial.print("UID tag :");
-  String content = "";
-  byte letter;
-  for (byte i = 0; i < mfrc522.uid.size; i++) {
-    Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
-    Serial.print(mfrc522.uid.uidByte[i], HEX);
-    content.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " "));
-    content.concat(String(mfrc522.uid.uidByte[i], HEX));
-  }
-  Serial.println();
-  Serial.print("Message : ");
-  content.toUpperCase();
+  bool cardDetected = false;
 
-  // Check if the card exists in the stored UID array
-  bool exists = false;
-  for (int i = 0; i < 10; i++) {
-    if (cardUIDs[i] == content) {
-      exists = true;
-      // Remove the card UID from the array
-      cardUIDs[i] = "";
-      Serial.println("Card exists. Revoking access...");
-      // Add logic to revoke access for the card
-      // For testing purposes, you can simply indicate that access has been revoked
-      Serial.println("Access revoked for card with UID: " + content);
-      break;
+  while (!cardDetected) {
+    display_REQUEST_CARD();
+    if (mfrc522.PICC_IsNewCardPresent()) {
+      // Select the card
+      if (mfrc522.PICC_ReadCardSerial()) {
+        // Show UID on serial monitor
+        beepConnectingSuccess();
+        Serial.print("UID tag :");
+        String content = "";
+        for (byte i = 0; i < mfrc522.uid.size; i++) {
+          Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
+          Serial.print(mfrc522.uid.uidByte[i], HEX);
+          content.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " "));
+          content.concat(String(mfrc522.uid.uidByte[i], HEX));
+        }
+        Serial.println();
+        Serial.print("Message : ");
+        content.toUpperCase();
+        content.replace(" ", "");
+
+        // Check if the card exists in the stored UID array
+        bool exists = checkExists_firebase(content);
+
+        if (exists) {
+          display_SUCCESS_ADD();
+          Serial.println("Card have");
+          revokeCard_firebase(content);
+          Serial.println("ADD De Success!");
+          // display_ALREADY();
+        } else {
+          Serial.println("REVORK : CARD NOT FOUND IN DATABASE");
+          display_NOT_FOUND();
+        }
+        cardDetected = true;  // Exit the loop since card is detected
+      }
     }
-  }
 
-  if (!exists) {
-    Serial.println("Card not found in database.");
-    // Add logic to indicate that the card is not found in the stored UID array
+    delay(500);  // Wait for a short period before checking again
   }
 }
+
 
 void revokeCard_firebase(String UID) {
   String path = _FIREBASE_DEVICE_PATH + "/RFID/AllowCard/" + UID;
@@ -297,6 +309,7 @@ void checkCard() {
   if (!mfrc522.PICC_ReadCardSerial()) {
     return;
   }
+  display_DOOR_CHECKING();
   // Show UID on serial monitor
   Serial.print("UID tag :");
   String content = "";
@@ -320,6 +333,7 @@ void checkCard() {
 
   // If the card UID doesn't exist in the stored UID array
   if (!exists) {
+    display_DOOR_CHECKING_DENIED();
     Serial.println("ERROR: NOT FOUND");
     notOpenDoor("KEY CARD");
   }
@@ -333,6 +347,7 @@ bool checkCard_firebase(String UID) {
   String check = _FIREBASE_DEVICE_PATH + "/RFID/AllowCard/" + UID;
   String ckUID = firebase.getString(check);
   if (ckUID == "OK") {
+    display_DOOR_CHECKING_GRANT();
     openDoor("KEY CARD");
     path = _FIREBASE_DEVICE_PATH + "/RFID/AllHis/" + UID;
     data2 = UID + " -- : " + TimeString;
@@ -447,34 +462,14 @@ char passkey[5];  // Assuming the passkey is 4 characters long
 bool passkeyEntered = false;
 
 void loop() {
+  display_DOOR_IDLE();
   Blynk.run();
   char key = keypad.getKey();
   bool redButtonState = digitalRead(RED_BUTTON_PIN);
 
   if (key == 'A') {
     passkeyEntered = false;  // Reset passkeyEntered flag
-    while (!passkeyEntered) {
-      display_login_admin_menu();
-      char exitKey = keypad.getKey();
-      bool checkkkPin = keyPinCheck();
-      if (checkkkPin) {
-        passkeyEntered = true;
-        // Selector menu for options 1-5
-        int option = 0;
-        while (option < 1 || option > 5) {
-          display_admin_menu_main();
-          char selectorKey = keypad.getKey();
-          if (selectorKey >= '1' && selectorKey <= '5') {
-            option = selectorKey - '0'; // Convert char to int
-            handle_menu_option(option);
-          }
-        }
-      }
-      if (!checkkkPin) {
-        display_login_admin_fail();
-        break;
-      }
-    }
+    loopKEYY(passkeyEntered);
   }
 
   if (redButtonState == HIGH || doorStatus) {
@@ -489,6 +484,31 @@ void loop() {
   }
 }
 
+void loopKEYY(bool passkeyEntered) {
+  while (!passkeyEntered) {
+    display_ADMIN_LOGIN();
+    char exitKey = keypad.getKey();
+    bool checkkkPin = keyPinCheck();
+    if (checkkkPin) {
+      passkeyEntered = true;
+      // Selector menu for options 1-5
+      int option = 0;
+      while (option < 1 || option > 5) {
+        display_admin_menu_main();
+        char selectorKey = keypad.getKey();
+        if (selectorKey >= '1' && selectorKey <= '5') {
+          option = selectorKey - '0';  // Convert char to int
+          handle_menu_option(option);
+        }
+      }
+    }
+    if (!checkkkPin) {
+      display_login_admin_fail();
+      break;
+    }
+  }
+}
+
 void handle_menu_option(int option) {
   // Handle menu options 1-5
   switch (option) {
@@ -499,7 +519,7 @@ void handle_menu_option(int option) {
       revokeCard();
       break;
     case 3:
-      // Handle option 3
+
       break;
     case 4:
       // Handle option 4

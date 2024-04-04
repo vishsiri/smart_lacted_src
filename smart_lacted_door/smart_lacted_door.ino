@@ -65,7 +65,7 @@ void core1Task(void* pvParameters) {
 #define LED_R 4
 #define LED_G 3
 #define LED_B 1
-// #define MENETIC_SWITCH
+#define MENETIC_SWITCH 5
 
 
 // NUMPAD SETUP
@@ -519,10 +519,10 @@ void handle_menu_option(int option) {
       revokeCard();
       break;
     case 3:
-
+      fingerprint_register();
       break;
     case 4:
-      // Handle option 4
+      fingerprint_delete();
       break;
     case 5:
       // Handle option 5

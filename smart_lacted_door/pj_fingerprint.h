@@ -3,7 +3,7 @@
 
 // Declare the sendMessageserer function
 void fingerprint_check();
-void fingerprint_register(int id);
-void fingerprint_delete(int id);
+void fingerprint_register();
+void fingerprint_delete();
 void fingerprint_verify();
 #endif

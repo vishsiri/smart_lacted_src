@@ -2,6 +2,7 @@
 #include "pj_fingerprint.h"
 #include <Adafruit_Fingerprint.h>
 #include "smart_lacted_door.h"
+#include "oled_screen.h"
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial2);
 uint8_t id;
 
@@ -27,30 +28,38 @@ int getFingerprintAmt() {
 }
 
 void fingerprint_check() {
-  int data = finger.getTemplateCount();
-  vTaskDelay(pdMS_TO_TICKS(50));
-  bool finger_id = getFingerprintID();
-  if (finger_id) {
+  uint8_t p = finger.getImage();
+  if (p != FINGERPRINT_OK) {
+    Serial.println("Error capturing fingerprint image.");
+    return;
+  }
+
+  bool finger = getFingerprintID();
+  if (finger) {
+    display_DOOR_CHECKING_GRANT();
     openDoor("a");
   } else {
-    Serial.println("NOT HAVE FINGER");
+    display_DOOR_CHECKING_DENIED();
+    Serial.println("ERROR: NOT FOUND");
+    notOpenDoor("KEY CARD");
+    Serial.println("Valid fingerprint ID not obtained.");
   }
 }
+
 
 void fingerprint_register() {
   Serial.println("พร้อมสำหรับการบันทึกข้อมูลลายนิ้วมือ!");
   Serial.println("โปรดเลือก ID # (จาก 1 to 127) ที่คุณต้องการบันทึกข้อมูลลายนิ้วมือ...");
   id = finger.templateCount + 1;
-  if (id == 0) {
-    return;
-  }
   Serial.print("หมายเลข ID #");
   Serial.println(id);
-  while (!getFingerprintEnroll())
-    ;
+  while (!getFingerprintEnroll());
+  firebase_add_fingerprint(id);
+  display_SUCCESS_ADD();
 }
 
-void fingerprint_delete(int id) {
+void fingerprint_delete() {
+
 }
 
 uint8_t readnumber(void) {
@@ -211,15 +220,36 @@ uint8_t getFingerprintEnroll() {
 }
 
 
+uint8_t deleteFingerprint(uint8_t id) {
+  uint8_t p = -1;
+
+  p = finger.deleteModel(id);
+
+  if (p == FINGERPRINT_OK) {
+    Serial.println("Deleted!");
+  } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
+    Serial.println("Communication error");
+  } else if (p == FINGERPRINT_BADLOCATION) {
+    Serial.println("Could not delete in that location");
+  } else if (p == FINGERPRINT_FLASHERR) {
+    Serial.println("Error writing to flash");
+  } else {
+    Serial.print("Unknown error: 0x"); Serial.println(p, HEX);
+  }
+
+  return p;
+}
+
+
 bool getFingerprintID() {
   uint8_t p = finger.getImage();
-  if (p != FINGERPRINT_OK) return -1;
+  if (p != FINGERPRINT_OK) return false;
 
   p = finger.image2Tz();
-  if (p != FINGERPRINT_OK) return -1;
+  if (p != FINGERPRINT_OK) return false;
 
   p = finger.fingerFastSearch();
-  if (p != FINGERPRINT_OK) return -1;
+  if (p != FINGERPRINT_OK) return false;
 
   // found a match!
   Serial.print("พบลายนิ้วมือ ID #");
@@ -233,9 +263,22 @@ bool getFingerprintID() {
 }
 
 
+void firebase_remove_fingerprint(int id) {
+  String path = _FIREBASE_DEVICE_PATH + "/Finger/AllowFinger/" + id;
+  firebase.setString(path, "Delete");
+  Serial.print("Delete Complete\n");
+}
+
+void firebase_add_fingerprint(int id) {
+  String path = _FIREBASE_DEVICE_PATH + "/Finger/AllowFinger/" + id;
+  firebase.setString(path, "OK");
+  Serial.print("Add Complete\n");
+}
+
 bool firebase_check_fingerprint(int id) {
   String check = _FIREBASE_DEVICE_PATH + "/Finger/AllowFinger/" + id;
   String ckUID = firebase.getString(check);
+  Serial.println(ckUID);
   if (ckUID == "OK") {
     return true;
   } else {

@@ -2,4 +2,5 @@
 #define SMART_LACTED_DOOR_H
 
 void openDoor(String type);
+void notOpenDoor(String type);
 #endif

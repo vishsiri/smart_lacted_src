@@ -46,26 +46,20 @@ const long gmtOffset_sec = 7 * 3600;
 const int daylightOffset_sec = 0;
 
 Firebase firebase(REFERENCE_URL);
-
-//TASK CORE
-TaskHandle_t Core1Task;
-
-void core1Task(void* pvParameters) {
-  while (1) {
-    TimeSetting();
-    TimeString = getTimeString();
-    vTaskDelay(pdMS_TO_TICKS(100));
-  }
-}
 // SETUP PIN
 #define BUZZER_PIN 12
 #define RED_BUTTON_PIN 27
 #define RELAY_LOCK 14
 #define OLED_RESET -1
-#define LED_R 4
+// #define LED_R 4
 #define LED_G 3
 #define LED_B 1
-#define MENETIC_SWITCH 5
+#define MENETIC_SWITCH 4
+
+//TASK CORE
+TaskHandle_t Core1Task;
+
+
 
 
 // NUMPAD SETUP
@@ -87,6 +81,43 @@ Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 #define RST_PIN 0
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);
+
+
+void core1Task(void* pvParameters) {
+  unsigned long previousMillis = 0;
+  const unsigned long interval = 10000; // 10 seconds in milliseconds
+  bool switchPressed = false;
+
+  while (1) {
+    TimeSetting();
+    TimeString = getTimeString();
+    String pathh, data22;
+    unsigned long currentMillis = millis();
+    if (digitalRead(MENETIC_SWITCH) == 1) {
+      if (!switchPressed) {
+        // Switch was just pressed, start the timer
+        previousMillis = currentMillis;
+        switchPressed = true;
+      }
+      if (currentMillis - previousMillis >= interval) {
+        beepDoorOpen();
+                beepDoorOpen();
+                        beepDoorOpen();
+                                beepDoorOpen();
+                                        beepDoorOpen();
+                                                beepDoorOpen();
+        pathh = _FIREBASE_DEVICE_PATH + "/AllHis/";
+        data22 = "DoorNotClose -- | " + TimeString;
+        firebase.pushString(_FIREBASE_DEVICE_PATH + "/AllHis/", data22); 
+        switchPressed = false; // Reset the switch state
+      }
+    } else {
+      switchPressed = false; // Reset the switch state if it's released
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
 
 //RGB
 // OLED SCREEN
@@ -115,24 +146,19 @@ void pressButtonOpenDoor() {
   }
 }
 
-void LEDColor(int r1, int r2, int r3) {
-  static unsigned long previousMillis = 0;
-  static unsigned long interval = 100;  // Adjust interval as needed
-  unsigned long currentMillis = millis();
+void LEDColor(int r2, int r3) {
+  analogWrite(LED_G, r2);
+    vTaskDelay(pdMS_TO_TICKS(200));
+  analogWrite(LED_B, r3);
+    vTaskDelay(pdMS_TO_TICKS(200));
 
-  if (currentMillis - previousMillis >= interval) {
-    analogWrite(LED_R, r1);
-    analogWrite(LED_G, r2);
-    analogWrite(LED_B, r3);
-    previousMillis = currentMillis;  // Update previousMillis
-  }
 }
 
 void pinModeSetup() {
   pinMode(BUZZER_PIN, OUTPUT);
   pinMode(RED_BUTTON_PIN, INPUT_PULLUP);
   pinMode(RELAY_LOCK, OUTPUT);
-  pinMode(LED_R, OUTPUT);
+  pinMode(MENETIC_SWITCH, INPUT_PULLUP);
   pinMode(LED_G, OUTPUT);
   pinMode(LED_B, OUTPUT);
 }
@@ -227,7 +253,7 @@ void addCard() {
       }
     }
 
-    delay(500);  // Wait for a short period before checking again
+    // delay(500);  // Wait for a short period before checking again
   }
 }
 
@@ -349,10 +375,10 @@ bool checkCard_firebase(String UID) {
   if (ckUID == "OK") {
     display_DOOR_CHECKING_GRANT();
     openDoor("KEY CARD");
-    path = _FIREBASE_DEVICE_PATH + "/RFID/AllHis/" + UID;
-    data2 = UID + " -- : " + TimeString;
-    firebase.pushString(_FIREBASE_DEVICE_PATH + "/RFID/AllHis/All", data2);  //folder รวมประวัติทั้งหมด
-    firebase.pushString(path, TimeString);                                   //folder แยกประวัติ
+    path = _FIREBASE_DEVICE_PATH + "/AllHis/" + UID;
+    data2 = "KeyCard #" + UID + " -- | " + TimeString;
+    firebase.pushString(_FIREBASE_DEVICE_PATH + "/AllHis/", data2);  //folder รวมประวัติทั้งหมด
+    // firebase.pushString(path, TimeString);                                   //folder แยกประวัติ
     Serial.print("Detected\t  ");
     Serial.print(UID);
     Serial.print("\n");
@@ -400,9 +426,10 @@ void setup() {
 
 
 void openDoor(String type) {
+
   digitalWrite(RELAY_LOCK, HIGH);
   beepDoorOpen();
-  // LEDColor(2, 0, 0);
+  // LEDColor(2, 0);
   //LINE.notify("DOOR OPEN WITH " + type);
   vTaskDelay(pdMS_TO_TICKS(2000));
   digitalWrite(RELAY_LOCK, LOW);
@@ -474,6 +501,10 @@ void loop() {
 
   if (redButtonState == HIGH || doorStatus) {
     openDoor("a");
+    String pathh, data22;
+    pathh = _FIREBASE_DEVICE_PATH + "/AllHis/";
+    data22 = "Leave -- | " + TimeString;
+    firebase.pushString(_FIREBASE_DEVICE_PATH + "/AllHis/", data22);  //folder รวมประวัติทั้งหมด
   } else {
     // Regardless of other conditions, check for a card
     Serial.println("Hold Card!");
@@ -526,8 +557,9 @@ void handle_menu_option(int option) {
       break;
     case 5:
       // Handle option 5
+      fingerprint_resetALL();
       break;
-    case '*':
+    case 0:
       break;
     default:
       // Handle invalid option

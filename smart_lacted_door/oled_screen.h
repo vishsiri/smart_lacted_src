@@ -19,4 +19,7 @@ void display_ALREADY();
 void display_DELETE_SUCESS();
 void display_NOT_FOUND();
 void display_ADMIN_LOGIN();
+void display_AGAIN();
+void display_REMOVE();
+void display_HOLD_FINGER();
 #endif

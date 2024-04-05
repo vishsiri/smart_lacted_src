@@ -6,4 +6,5 @@ void fingerprint_check();
 void fingerprint_register();
 void fingerprint_delete();
 void fingerprint_verify();
+void fingerprint_resetALL();
 #endif

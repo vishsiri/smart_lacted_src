@@ -6,9 +6,9 @@
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial2);
 uint8_t id;
 uint8_t ids;
-
+uint8_t idd;
 bool fingers = false;
-
+bool mismatch = false;
 void fingerprint_verify() {
   finger.begin(57600);
   if (finger.verifyPassword()) {
@@ -23,9 +23,13 @@ void fingerprint_verify() {
 
 uint8_t getFingerprintAmt() {
   finger.getTemplateCount();
-  int amt = Serial.println(finger.templateCount);
+  int amt = finger.templateCount;
   Serial.print("ข้อมูลภายในเซ็นเซอร์ ");
   Serial.print(amt);
+  Serial.println(" รูปแบบ");
+  finger.getTemplateCount();
+  Serial.println("ข้อมูลภายในเซ็นเซอร์ ");
+  Serial.print(finger.templateCount);
   Serial.println(" รูปแบบ");
   return amt;
 }
@@ -71,20 +75,25 @@ bool check_firebase_exists(int id) {
 }
 
 void fingerprint_resetALL() {
-  finger.emptyDatabase();
-  Serial.println("Now database is empty :)");
+  for (int i = 0; i < 2; i++) {
+    finger.emptyDatabase();
+    Serial.println("Now database is empty :)");
+    delay(500);
+  }
+  firebase_reset_fingerprint();
+  display_SUCCESS_ADD();
 }
 
 void fingerprint_register() {
   display_HOLD_FINGER();
   Serial.println("พร้อมสำหรับการบันทึกข้อมูลลายนิ้วมือ!");
-
-  // Check if fingerprint ID already exists in the module
-  bool check = check_firebase_exists(id);
-  if (check) {
-    firebase_add_fingerprint(id);
-    return;
-  }
+  // id =getFingerprintID();
+  // // // Check if fingerprint ID already exists in the module
+  // bool check = check_firebase_exists(id);
+  // if (check) {
+  //   firebase_add_fingerprint(id);
+  //   return;
+  // }
 
   ids = getFingerprintAmt();
   ids += 1;
@@ -92,12 +101,29 @@ void fingerprint_register() {
   Serial.println(ids);
   while (!getFingerprintEnroll())
     ;
-  firebase_add_fingerprint(id);
-  display_SUCCESS_ADD();
+  if(mismatch) {
+    display_login_admin_fail();
+  }
+  if(!mismatch) {
+    display_SUCCESS_ADD();
+  } 
 }
 
 
 void fingerprint_delete() {
+
+  display_HOLD_FINGER();
+  Serial.println("พร้อมสำหรับการบันทึกข้อมูลลายนิ้วมือ!");
+  while (!getFingerprintID())
+    ;
+  idd = id;
+  Serial.print("หมายเลข ID #");
+  Serial.println(idd);
+  firebase_remove_fingerprint(idd);
+  Serial.println("ADD DELETTEE SUSCESS@@@");
+  Serial.print(idd);
+  deleteFingerprint(idd);
+  display_SUCCESS_ADD();
 }
 
 uint8_t readnumber(void) {
@@ -232,6 +258,7 @@ uint8_t getFingerprintEnroll() {
     return p;
   } else if (p == FINGERPRINT_ENROLLMISMATCH) {
     Serial.println("ลายนิ้วมือไม่ตรงกัน");
+    mismatch = true;
     return p;
   } else {
     Serial.println("พบข้อผิดพลาดที่ไม่รู้จัก");
@@ -242,7 +269,11 @@ uint8_t getFingerprintEnroll() {
   Serial.println(ids);
   p = finger.storeModel(ids);
   if (p == FINGERPRINT_OK) {
+    mismatch = false;
     Serial.println("บันทึกลายนิ้วมือ!");
+    firebase_add_fingerprint(ids);
+    Serial.println("ADD FINGER SUSCESS@@@");
+    Serial.print(ids);
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("พบข้อผิดพลาดของการเชื่อมต่อ");
     return p;
@@ -307,6 +338,14 @@ void firebase_remove_fingerprint(int id) {
   String path = _FIREBASE_DEVICE_PATH + "/Finger/AllowFinger/" + id;
   firebase.setString(path, "Delete");
   Serial.print("Delete Complete\n");
+}
+
+void firebase_reset_fingerprint() {
+  firebase.deleteData(_FIREBASE_DEVICE_PATH + "/Finger/AllowFinger");
+  Serial.print("Delete All Data Complete\n");
+  String path = _FIREBASE_DEVICE_PATH + "/Finger/AllowFinger/" + 0;
+  firebase.setString(path, "Delete");
+  Serial.print("Set Defalut Complete!");
 }
 
 void firebase_add_fingerprint(int id) {

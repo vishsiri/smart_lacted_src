@@ -85,7 +85,7 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 
 void core1Task(void* pvParameters) {
   unsigned long previousMillis = 0;
-  const unsigned long interval = 10000; // 10 seconds in milliseconds
+  const unsigned long interval = 10000;  // 10 seconds in milliseconds
   bool switchPressed = false;
 
   while (1) {
@@ -101,18 +101,18 @@ void core1Task(void* pvParameters) {
       }
       if (currentMillis - previousMillis >= interval) {
         beepDoorOpen();
-                beepDoorOpen();
-                        beepDoorOpen();
-                                beepDoorOpen();
-                                        beepDoorOpen();
-                                                beepDoorOpen();
+        beepDoorOpen();
+        beepDoorOpen();
+        beepDoorOpen();
+        beepDoorOpen();
+        beepDoorOpen();
         pathh = _FIREBASE_DEVICE_PATH + "/AllHis/";
         data22 = "DoorNotClose -- | " + TimeString;
-        firebase.pushString(_FIREBASE_DEVICE_PATH + "/AllHis/", data22); 
-        switchPressed = false; // Reset the switch state
+        firebase.pushString(_FIREBASE_DEVICE_PATH + "/AllHis/", data22);
+        switchPressed = false;  // Reset the switch state
       }
     } else {
-      switchPressed = false; // Reset the switch state if it's released
+      switchPressed = false;  // Reset the switch state if it's released
     }
 
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -148,10 +148,9 @@ void pressButtonOpenDoor() {
 
 void LEDColor(int r2, int r3) {
   analogWrite(LED_G, r2);
-    vTaskDelay(pdMS_TO_TICKS(200));
+  vTaskDelay(pdMS_TO_TICKS(200));
   analogWrite(LED_B, r3);
-    vTaskDelay(pdMS_TO_TICKS(200));
-
+  vTaskDelay(pdMS_TO_TICKS(200));
 }
 
 void pinModeSetup() {
@@ -280,6 +279,11 @@ void revokeCard() {
 
   while (!cardDetected) {
     display_REQUEST_CARD();
+    char key = keypad.getKey();
+    if (key == '*') {
+      loopKEYY(true);
+      return;
+    }
     if (mfrc522.PICC_IsNewCardPresent()) {
       // Select the card
       if (mfrc522.PICC_ReadCardSerial()) {

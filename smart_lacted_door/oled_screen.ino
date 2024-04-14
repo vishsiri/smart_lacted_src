@@ -1109,7 +1109,7 @@ void display_admin_menu_main() {
   display.setCursor(0, 40);
   display.println("[ 4 ] REMOVE FingerPrint");
   display.setCursor(0, 50);
-  display.println("[ 5 ] SET ADMIN PASSWORD");
+  display.println("[ 5 ] RESET FACTORY");
   display.display();
 }
 

@@ -22,4 +22,5 @@ void display_ADMIN_LOGIN();
 void display_AGAIN();
 void display_REMOVE();
 void display_HOLD_FINGER();
+void display_please_close_door();
 #endif

@@ -403,10 +403,11 @@ String getTimeString() {
     Serial.println("Failed to obtain time");
     return "Failed to obtain time";
   }
-  char buf[30];
-  strftime(buf, sizeof(buf), "%A, %B %d %Y %H:%M:%S", &timeinfo);
+  char buf[40]; // Increase buffer size to accommodate the new format
+  strftime(buf, sizeof(buf), "%A, %B %d %Y, at %I:%M %p", &timeinfo);
   return String(buf);
 }
+
 
 void setup() {
   pinModeSetup();
@@ -520,6 +521,10 @@ void loop() {
 }
 
 void loopKEYY(bool passkeyEntered) {
+  String pathh, data22;
+  pathh = _FIREBASE_DEVICE_PATH + "/AllHis/";
+  data22 = "EnterAdminMenu -- | " + TimeString;
+  firebase.pushString(_FIREBASE_DEVICE_PATH + "/AllHis/", data22);  //folder รวมประวัติทั้งหมด
   while (!passkeyEntered) {
     display_ADMIN_LOGIN();
     char exitKey = keypad.getKey();
@@ -545,6 +550,7 @@ void loopKEYY(bool passkeyEntered) {
 }
 
 void handle_menu_option(int option) {
+
   // Handle menu options 1-5
   switch (option) {
     case 1:
